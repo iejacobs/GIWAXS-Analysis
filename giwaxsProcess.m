@@ -308,6 +308,24 @@ filename = {filelist.name};
 sampleInd = contains(filename,num2str(imgNum));
 imgfile = filename(sampleInd);
 
+% If no TIF found, check for HDF5 (.hdf5 or .h5)
+if isempty(imgfile)
+    hdf5list = [dir(fullfile(p.Results.ImagePath,"*.hdf5")); ...
+                dir(fullfile(p.Results.ImagePath,"*.h5"))];
+    hdf5names = {hdf5list.name};
+    hdf5ind = contains(hdf5names, num2str(imgNum));
+    hdf5files = hdf5names(hdf5ind);
+    if isscalar(hdf5files)
+        hdf5FullPath = string(fullfile(p.Results.ImagePath, hdf5files{1}));
+        convertedTiffPath = convertHDF5toTIFF(hdf5FullPath, string(tempdir));
+        imgfile = {convertedTiffPath};
+        isHDF5Converted = true; %#ok<NASGU>
+    elseif length(hdf5files) > 1
+        ME = MException("GIWAXSProcess:TooManyImages","More than one HDF5 file found matching imgnum");
+        throw(ME)
+    end
+end
+
 %if we have 2 image files matching imgNum, gap fill the images
 if length(imgfile) == 2
     %sort
@@ -333,9 +351,11 @@ elseif length(imgfile) < 1
 end
 
 % Load image (gap filled if we have it) to gixsgui
-if exist("gapFillFilename")
+if exist("gapFillFilename","var")
     data.ImFile = gapFillFilename;
     data.Mask = ones(size(data.ImFile));
+elseif exist("isHDF5Converted","var")
+    data.ImFile = imgfile{1};  % full path already set by convertHDF5toTIFF
 else
     data.ImFile = char(fullfile(p.Results.ImagePath,imgfile{1}));
 end

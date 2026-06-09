@@ -1,26 +1,24 @@
-function [outputArg1,outputArg2] = convertHDF5toTIFF(filename,inputArg2)
-%CONVERTHDF5TOTIFF Summary of this function goes here
-%   Detailed explanation goes here
-arguments (Input)
-    inputArg1
-    inputArg2
+function tiffPath = convertHDF5toTIFF(hdf5Path, outputDir)
+% Read a GIWAXS image from an HDF5 file and write it as a 32-bit TIFF.
+% Returns the full path to the written TIFF file.
+arguments
+    hdf5Path (1,1) string
+    outputDir (1,1) string = string(tempdir)
 end
 
-datastruct = struct();
+img = int32(squeeze(h5read(hdf5Path, "/entry/data/data")));
 
-datastruct.Groups(1).Name = "entry";
+[~, name] = fileparts(hdf5Path);
+tiffPath = char(fullfile(outputDir, name + ".tif"));
 
-datastruct.Groups(1).Groups(1).Name = "data";
-
-datastruct.Groups(1).Groups(1).Datasets(1).Name = "data";
-datastruct.Groups(1).Groups(1).Datasets(1).Value = h5read(filename, "/entry/data/data");
-
-
-arguments (Output)
-    outputArg1
-    outputArg2
-end
-
-outputArg1 = inputArg1;
-outputArg2 = inputArg2;
+t = Tiff(tiffPath, 'w');
+closer = onCleanup(@() t.close());
+t.setTag('Photometric',      Tiff.Photometric.MinIsBlack);
+t.setTag('ImageLength',      size(img, 1));
+t.setTag('ImageWidth',       size(img, 2));
+t.setTag('BitsPerSample',    32);
+t.setTag('SampleFormat',     Tiff.SampleFormat.Int);
+t.setTag('SamplesPerPixel',  1);
+t.setTag('PlanarConfiguration', Tiff.PlanarConfiguration.Chunky);
+t.write(img);
 end
