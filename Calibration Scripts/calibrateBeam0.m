@@ -23,7 +23,8 @@
 scriptDir   = fileparts(mfilename('fullpath'));
 BASE        = fileparts(scriptDir);
 CAL_DIR     = fullfile(fileparts(BASE), 'February 2026 Beamtime', 'Calibration Data');
-addpath(fullfile(BASE, 'Support Functions'));
+addpath(scriptDir);                          % calibration functions (fitBeam0Calibration, ...)
+addpath(fullfile(BASE, 'Support Functions')); % shared utilities (readDatParams, ...)
 
 HDF5_FILE   = fullfile(CAL_DIR, 'pilatus2-617694.hdf5');
 OUTPUT_FILE = fullfile(CAL_DIR, 'beam0_calibration.mat');
