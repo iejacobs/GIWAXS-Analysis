@@ -45,6 +45,13 @@ if ~isfile(nxsFile)
     error('calibrateBeam0:noNXS', 'NXS file not found: %s', nxsFile);
 end
 dpsz2_all = double(h5read(nxsFile, '/entry/instrument/dpsz2/value'));
+% Reference detector x/y stage positions (held fixed during the scan). beam0
+% is calibrated at these positions; measurements at other dpsx/dpsy are
+% shifted by the detector motion in getBeam0FromParams.
+refDpsx   = double(h5read(nxsFile, '/entry/instrument/dpsx/value'));
+refDpsy   = double(h5read(nxsFile, '/entry/instrument/dpsy/value'));
+refDpsx   = refDpsx(1);
+refDpsy   = refDpsy(1);
 raw       = h5read(HDF5_FILE, '/entry/data/data');   % [nx=1475, ny=1679, N]
 nFrames   = size(raw, 3);
 if numel(dpsz2_all) ~= nFrames
@@ -194,6 +201,8 @@ beam0Cal.r2Y          = cal.r2Y;
 beam0Cal.dpsz2        = dpsz2(:);
 beam0Cal.beam0        = beam0v;
 beam0Cal.sigma        = sigmas(validMask, :);
+beam0Cal.refDpsx      = refDpsx;
+beam0Cal.refDpsy      = refDpsy;
 beam0Cal.pixelSize_mm = PIXEL_SIZE_MM;
 beam0Cal.wavelength_A = WAVELENGTH_A;
 beam0Cal.hdf5File     = string(HDF5_FILE);

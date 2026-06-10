@@ -1,4 +1,4 @@
-function [beam0, dpsz2] = findBeam0DirectBeam(hdf5File)
+function [beam0, dpsz2, refDpsx, refDpsy] = findBeam0DirectBeam(hdf5File)
 % Extract beam0 pixel positions from a direct beam HDF5 scan over dpsz2.
 %
 % Reads per-frame dpsz2 values from the paired NXS file (auto-located as
@@ -7,11 +7,17 @@ function [beam0, dpsz2] = findBeam0DirectBeam(hdf5File)
 % intensity-weighted centroid to find beam0.
 %
 % Returns:
-%   beam0  - N×2 array of [x, y] beam centre positions (1-indexed pixels)
-%              x = first array dimension, y = second array dimension
-%   dpsz2  - N×1 vector of dpsz2 motor positions (mm), one per frame
+%   beam0   - N×2 array of [x, y] beam centre positions (1-indexed pixels)
+%               x = first array dimension, y = second array dimension
+%   dpsz2   - N×1 vector of dpsz2 motor positions (mm), one per frame
+%   refDpsx - detector x stage position (mm) during the scan. This is the
+%               reference dpsx the calibrated beam0 corresponds to; a
+%               measurement taken at a different dpsx is shifted accordingly.
+%   refDpsy - detector y stage position (mm) during the scan (reference dpsy)
 %
-% Frames with no beam signal are excluded from both outputs.
+% Frames with no beam signal are excluded from both outputs. dpsx and dpsy
+% are held fixed during a beam0 calibration scan, so the first value is
+% returned as the reference.
 
 arguments
     hdf5File (1,1) string {mustBeFile}
@@ -30,6 +36,12 @@ end
 
 % Per-frame dpsz2 from NXS
 dpsz2_all = h5read(nxsFile, '/entry/instrument/dpsz2/value');
+
+% Reference detector x/y stage positions (held fixed during the scan)
+refDpsx = double(h5read(nxsFile, '/entry/instrument/dpsx/value'));
+refDpsy = double(h5read(nxsFile, '/entry/instrument/dpsy/value'));
+refDpsx = refDpsx(1);
+refDpsy = refDpsy(1);
 
 % Load detector frames
 raw     = h5read(hdf5File, '/entry/data/data');
