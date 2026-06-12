@@ -2,6 +2,11 @@ function [data, IPlinecut, OOPlinecut, processedImage] = giwaxsProcess(sampleTab
 %INITIALPROCESS Summary of this function goes here
 %   Detailed explanation goes here
 
+%ensure bundled helper folders are on the path (Support Functions, and the
+%geometry-calibration functions used when UseCalibration is true)
+fnDir = fileparts(mfilename('fullpath'));
+addpath(fullfile(fnDir,'Support Functions'), fullfile(fnDir,'Calibration Scripts'));
+
 p = inputParser;
 
 % %imgnum
@@ -18,6 +23,29 @@ addParameter(p,'Beam0',defaultBeam0,validBeam0);
 defaultSpecular = [];
 validSpecular = @(x) isnumeric(x) && isequal(size(x), [1,2]);
 addParameter(p,'Specular',defaultSpecular,validSpecular);
+
+%SDD (sample-detector distance, mm) manual override
+defaultSDD = [];
+validSDD = @(x) isnumeric(x) && isscalar(x);
+addParameter(p,'SDD',defaultSDD,validSDD);
+
+%Use beam0/SDD geometry calibration derived from the .dat metadata
+defaultUseCalibration = true;
+validUseCalibration = @(x) islogical(x) && isscalar(x);
+addParameter(p,'UseCalibration',defaultUseCalibration,validUseCalibration);
+
+%Beam0 calibration file (beam0 vs detector position)
+defaultBeam0CalFile = "beam0_calibration.mat";
+validCalFile = @(x) isstring(x) && isscalar(x);
+addParameter(p,'Beam0CalFile',defaultBeam0CalFile,validCalFile);
+
+%SDD calibration file (SDD vs detector position)
+defaultSDDCalFile = "sdd_calibration.mat";
+addParameter(p,'SDDCalFile',defaultSDDCalFile,validCalFile);
+
+%Metadata path (folder holding <imgNum>.dat); empty => use ImagePath
+defaultMetadataPath = "";
+addParameter(p,'MetadataPath',defaultMetadataPath,validCalFile);
 
 %Reshape data
 defaultReshape = true;
@@ -361,9 +389,21 @@ else
 end
 
 
+%derive Beam0, SDD and beam energy from the .dat metadata + calibrations.
+%lowest automatic precedence: the sample table and Beam0/SDD arguments below
+%override these values. Warns and falls back if metadata/calibration missing.
+if p.Results.UseCalibration
+    metaPath = p.Results.MetadataPath;
+    if metaPath == ""
+        metaPath = p.Results.ImagePath;
+    end
+    setGeometryFromCalibration(data, imgNum, metaPath, ...
+        p.Results.Beam0CalFile, p.Results.SDDCalFile);
+end
+
 %if beam0 is given in sample table use this value
-try 
-    beam0 = sampleTable.Beam0;    
+try
+    beam0 = sampleTable.Beam0;
     b0exists = ~isnan(beam0);
     if and(b0exists(1),b0exists(2))
         data.Beam0 = beam0;
@@ -381,6 +421,11 @@ if ~isempty(p.Results.Beam0)
     else
         data.Specular = data.Beam0 - [0 1];
     end
+end
+
+%SDD given as argument overrides the calibration-derived value
+if ~isempty(p.Results.SDD)
+    data.SDD = p.Results.SDD;
 end
 
 %update q maps if Beam0 or specular have changed
