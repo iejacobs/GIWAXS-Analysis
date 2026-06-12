@@ -1,24 +1,16 @@
-function tiffPath = convertHDF5toTIFF(hdf5Path, outputDir)
+function tiffPath = convertHDF5toTIFF(hdf5Path, outputDir, frameNumber)
 % Read a GIWAXS image from an HDF5 file and write it as a 32-bit TIFF.
+% For multi-frame (scan) files, frameNumber selects the frame (default 1).
 % Returns the full path to the written TIFF file.
 arguments
-    hdf5Path (1,1) string
-    outputDir (1,1) string = string(tempdir)
+    hdf5Path    (1,1) string
+    outputDir   (1,1) string = string(tempdir)
+    frameNumber double {mustBeScalarOrEmpty} = []
 end
 
-img = int32(squeeze(h5read(hdf5Path, "/entry/data/data")));
+img = readHDF5Image(hdf5Path, frameNumber);
 
 [~, name] = fileparts(hdf5Path);
 tiffPath = char(fullfile(outputDir, name + ".tif"));
-
-t = Tiff(tiffPath, 'w');
-closer = onCleanup(@() t.close());
-t.setTag('Photometric',      Tiff.Photometric.MinIsBlack);
-t.setTag('ImageLength',      size(img, 1));
-t.setTag('ImageWidth',       size(img, 2));
-t.setTag('BitsPerSample',    32);
-t.setTag('SampleFormat',     Tiff.SampleFormat.Int);
-t.setTag('SamplesPerPixel',  1);
-t.setTag('PlanarConfiguration', Tiff.PlanarConfiguration.Chunky);
-t.write(img);
+writeInt32TIFF(img, tiffPath);
 end

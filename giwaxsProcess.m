@@ -47,6 +47,12 @@ addParameter(p,'SDDCalFile',defaultSDDCalFile,validCalFile);
 defaultMetadataPath = "";
 addParameter(p,'MetadataPath',defaultMetadataPath,validCalFile);
 
+%Frame number to extract from multi-frame (scan) HDF5 files; empty => first
+%frame (with a warning if more frames exist)
+defaultFrameNumber = [];
+validFrameNumber = @(x) isnumeric(x) && (isempty(x) || (isscalar(x) && x >= 1 && mod(x,1) == 0));
+addParameter(p,'FrameNumber',defaultFrameNumber,validFrameNumber);
+
 %Reshape data
 defaultReshape = true;
 validReshape = @(x) islogical(x) && isscalar(x);
@@ -345,9 +351,8 @@ if isempty(imgfile)
     hdf5files = hdf5names(hdf5ind);
     if isscalar(hdf5files)
         hdf5FullPath = string(fullfile(p.Results.ImagePath, hdf5files{1}));
-        convertedTiffPath = convertHDF5toTIFF(hdf5FullPath, string(tempdir));
-        imgfile = {convertedTiffPath};
-        isHDF5Converted = true; %#ok<NASGU>
+        imgfile = hdf5files;
+        isHDF5 = true; %#ok<NASGU> tested via exist() below
     elseif length(hdf5files) > 1
         ME = MException("GIWAXSProcess:TooManyImages","More than one HDF5 file found matching imgnum");
         throw(ME)
@@ -382,8 +387,24 @@ end
 if exist("gapFillFilename","var")
     data.ImFile = gapFillFilename;
     data.Mask = ones(size(data.ImFile));
-elseif exist("isHDF5Converted","var")
-    data.ImFile = imgfile{1};  % full path already set by convertHDF5toTIFF
+elseif exist("isHDF5","var")
+    %load the HDF5 frame directly into the gixsdata object
+    [img, nFrames] = readHDF5Image(hdf5FullPath, p.Results.FrameNumber);
+    if nFrames > 1 && isempty(p.Results.FrameNumber)
+        warning("GIWAXSProcess:MultiFrameHDF5", ...
+            "HDF5 file for image %d contains %d frames; processing frame 1. " + ...
+            "Pass FrameNumber to select another.", imgNum, nFrames);
+    end
+    data.RawData = img;
+
+    %mask detector gap (<0) and overflow pixels
+    OVERFLOW = 1048575;
+    data.Mask = data.Mask & (data.RawData >= 0) & (data.RawData ~= OVERFLOW);
+
+    %save the extracted frame as TIFF alongside the other outputs
+    if p.Results.SaveData
+        writeInt32TIFF(img, fullfile(outputPath, strcat(outputFilename, ".tif")));
+    end
 else
     data.ImFile = char(fullfile(p.Results.ImagePath,imgfile{1}));
 end
