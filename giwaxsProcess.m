@@ -397,10 +397,6 @@ elseif exist("isHDF5","var")
     end
     data.RawData = img;
 
-    %mask detector gap (<0) and overflow pixels
-    OVERFLOW = 1048575;
-    data.Mask = data.Mask & (data.RawData >= 0) & (data.RawData ~= OVERFLOW);
-
     %save the extracted frame as TIFF alongside the other outputs
     if p.Results.SaveData
         writeInt32TIFF(img, fullfile(outputPath, strcat(outputFilename, ".tif")));
