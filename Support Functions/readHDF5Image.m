@@ -31,5 +31,9 @@ if frameNumber < 1 || frameNumber > nFrames || mod(frameNumber, 1) ~= 0
         frameNumber, hdf5Path, nFrames);
 end
 
-img = int32(raw(:, :, frameNumber));
+% h5read returns the dataset with axes reversed relative to the detector's
+% native layout (HDF5 is row-major, MATLAB column-major), i.e. transposed
+% versus the gixsdata parameter file's Mask/geometry. Transpose back so the
+% returned image matches the detector orientation the maps and Beam0 assume.
+img = int32(raw(:, :, frameNumber)).';
 end

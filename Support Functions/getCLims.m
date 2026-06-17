@@ -1,23 +1,25 @@
-function [climScaled] = getCLims(climInput,sampleAtten,sampleExposureTime,scaling,refAtten,refExposureTime)
-%GETCLIMS Summary of this function goes here
-%   Detailed explanation goes here
+function [climScaled] = getCLims(climInput,sampleTrans,sampleExposureTime,scaling,refTrans,refExposureTime)
+%GETCLIMS Scale colour limits by beam transmission and exposure time.
+%   sampleTrans is the fractional beam transmission for the image, read from
+%   the .dat metadata 'transmission' field (1 = no attenuation). refTrans and
+%   refExposureTime are the reference conditions the input limits correspond
+%   to (default: transmission 1, exposure 1 s).
 
     if nargin == 4
-        refAtten = 0;
+        refTrans = 1;
         refExposureTime = 1;
+    end
+
+    %nothing to scale by - leave the limits untouched
+    if isempty(sampleTrans)
+        climScaled = climInput;
+        warning("Clim values not scaled; no transmission value provided.")
+        return
     end
 
     if scaling == 'log'
         climInput = 10.^climInput;
     end
-
-    load("attenuationTable.mat");
-
-    ind = attenuation == refAtten;
-    refTrans = transmission(ind);
-
-    ind = attenuation == sampleAtten;
-    sampleTrans = transmission(ind);
 
     %assuming transmission of 1 and exposure time of 1s in reference
     scalingFactor = (sampleTrans./refTrans).*(sampleExposureTime/refExposureTime);
@@ -26,14 +28,8 @@ function [climScaled] = getCLims(climInput,sampleAtten,sampleExposureTime,scalin
 
     if scaling == 'log'
         climScaled = log10(climScaled);
-        
-        climScaled = max(climScaled,[0,0]);
-    end
 
-    if isempty(climScaled)
-        climScaled = climInput;
-        warning("Clim values not scaled, check sample attenuation and verify " + ...
-            "corresponding entry exists in attenuationTable.mat")
+        climScaled = max(climScaled,[0,0]);
     end
 end
 

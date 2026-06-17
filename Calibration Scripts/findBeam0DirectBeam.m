@@ -7,8 +7,9 @@ function [beam0, dpsz2, refDpsx, refDpsy] = findBeam0DirectBeam(hdf5File)
 % intensity-weighted centroid to find beam0.
 %
 % Returns:
-%   beam0   - N×2 array of [x, y] beam centre positions (1-indexed pixels)
-%               x = first array dimension, y = second array dimension
+%   beam0   - N×2 array of [x, y] beam centre positions (1-indexed pixels),
+%               in the gixsdata Beam0 convention [column, row], matching the
+%               detector orientation produced by readHDF5Image
 %   dpsz2   - N×1 vector of dpsz2 motor positions (mm), one per frame
 %   refDpsx - detector x stage position (mm) during the scan. This is the
 %               reference dpsx the calibrated beam0 corresponds to; a
@@ -43,9 +44,10 @@ refDpsy = double(h5read(nxsFile, '/entry/instrument/dpsy/value'));
 refDpsx = refDpsx(1);
 refDpsy = refDpsy(1);
 
-% Load detector frames
-raw     = h5read(hdf5File, '/entry/data/data');
-nFrames = size(raw, 3);
+% Number of detector frames (read one at a time via readHDF5Image below so
+% the orientation matches the rest of the pipeline)
+rawInfo = h5info(hdf5File, '/entry/data/data');
+nFrames = rawInfo.Dataspace.Size(3);
 
 if numel(dpsz2_all) ~= nFrames
     error('findBeam0DirectBeam:frameMismatch', ...
@@ -57,7 +59,8 @@ beam0 = zeros(0, 2);
 dpsz2 = zeros(0, 1);
 
 for i = 1:nFrames
-    img = double(raw(:,:,i));
+    % use the shared reader so the image orientation matches giwaxsProcess
+    img = double(readHDF5Image(hdf5File, i));
     img(img == OVERFLOW | img < 0) = 0;
 
     frameMax = max(img(:));
@@ -67,11 +70,12 @@ for i = 1:nFrames
 
     thresh = 0.5 * frameMax;
     mask   = img > thresh;
-    [xi, yi] = find(mask);
+    [ri, ci] = find(mask);     % ri = row index, ci = column index
     w = img(mask);
     wsum = sum(w);
 
-    beam0(end+1, :) = [sum(xi .* w) / wsum,  sum(yi .* w) / wsum]; %#ok<AGROW>
+    % return [column, row] to match the gixsdata Beam0 convention
+    beam0(end+1, :) = [sum(ci .* w) / wsum,  sum(ri .* w) / wsum]; %#ok<AGROW>
     dpsz2(end+1)    = dpsz2_all(i);                                  %#ok<AGROW>
 
     fprintf('Frame %2d  dpsz2=%6.1f mm  beam0=[%.2f, %.2f]\n', ...

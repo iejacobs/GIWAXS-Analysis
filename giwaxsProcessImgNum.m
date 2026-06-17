@@ -229,9 +229,20 @@ if exist('sampleTable')
             outputPath = fullfile(p.Results.OutputPath,sampleTable.SampleSet(sampleInd));
         end
 
-        %update color limits to exposure conditions if given
+        %update color limits to exposure conditions if given, using the beam
+        %transmission from the co-located .dat metadata ('transmission' field)
         if p.Results.ScaleToExposure
-            colorLimits = getCLims(colorLimits,attenuation,exposureTime,p.Results.PlotScale);
+            datFile = fullfile(p.Results.ImagePath, num2str(imgNum) + ".dat");
+            datParams = [];
+            if isfile(datFile)
+                datParams = readDatParams(datFile);
+            end
+            if ~isempty(datParams) && isfield(datParams,'transmission')
+                colorLimits = getCLims(colorLimits,datParams.transmission,exposureTime,p.Results.PlotScale);
+            else
+                warning("giwaxsProcessImgNum:noTransmission", ...
+                    "No 'transmission' metadata for image %d; colour limits not scaled.", imgNum);
+            end
         end
     end
 else

@@ -70,13 +70,15 @@ dpsz2 = dpsz2(:);
 beam0 = [polyval(beam0Cal.coeffsX, dpsz2), polyval(beam0Cal.coeffsY, dpsz2)];
 
 % Shift for detector x/y translation relative to the calibration reference.
-% A +mm move of the detector stage shifts the direct beam to a lower pixel,
-% hence the subtraction. (Skipped if dpsx/dpsy or the reference are absent.)
+% A +mm move of the detector stage shifts the direct beam to a higher pixel
+% (verified against the 620151 direct-beam frame: beam moves from the
+% calibration's [219.7,1657.7] to [230,1647] as dpsx/dpsy change), hence the
+% addition. (Skipped if dpsx/dpsy or the reference are absent.)
 px = beam0Cal.pixelSize_mm;
 if ~isempty(dpsx) && isfield(beam0Cal, 'refDpsx')
-    beam0(:,1) = beam0(:,1) - (dpsx(:) - beam0Cal.refDpsx) / px;
+    beam0(:,1) = beam0(:,1) + (dpsx(:) - beam0Cal.refDpsx) / px;
 end
 if ~isempty(dpsy) && isfield(beam0Cal, 'refDpsy')
-    beam0(:,2) = beam0(:,2) - (dpsy(:) - beam0Cal.refDpsy) / px;
+    beam0(:,2) = beam0(:,2) + (dpsy(:) - beam0Cal.refDpsy) / px;
 end
 end

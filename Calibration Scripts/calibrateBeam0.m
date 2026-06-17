@@ -53,8 +53,10 @@ refDpsx   = double(h5read(nxsFile, '/entry/instrument/dpsx/value'));
 refDpsy   = double(h5read(nxsFile, '/entry/instrument/dpsy/value'));
 refDpsx   = refDpsx(1);
 refDpsy   = refDpsy(1);
-raw       = h5read(HDF5_FILE, '/entry/data/data');   % [nx=1475, ny=1679, N]
-nFrames   = size(raw, 3);
+% Each frame is read (and correctly transposed to detector orientation) via
+% readHDF5Image inside the loop, so the orientation matches giwaxsProcess.
+rawInfo   = h5info(HDF5_FILE, '/entry/data/data');
+nFrames   = rawInfo.Dataspace.Size(3);
 if numel(dpsz2_all) ~= nFrames
     error('calibrateBeam0:mismatch', ...
         'NXS has %d dpsz2 values but HDF5 has %d frames', numel(dpsz2_all), nFrames);
@@ -67,7 +69,7 @@ beam0  = nan(nFrames, 2);
 sigmas = nan(nFrames, 2);
 
 for i = 1:nFrames
-    img      = double(raw(:,:,i));
+    img      = double(readHDF5Image(HDF5_FILE, i));   % detector orientation
     img_proc = img;
     img_proc(img == OVERFLOW | img < 0) = 0;
 
@@ -100,7 +102,9 @@ for i = 1:nFrames
         xc = double(xp);
         yc = double(yp);
     end
-    beam0(i,:) = [xc, yc];
+    % xc is along dim1 (row) and yc along dim2 (column) of the transposed
+    % detector image; store as [column, row] for the gixsdata Beam0 convention
+    beam0(i,:) = [yc, xc];
 
     % --- Gaussian fits (diagnostic only) ---
     xLo = max(1,  xp - CROP_HALFWIDTH);

@@ -74,9 +74,11 @@ for i=1:length(p.Parameters)
     else
         %if not default values, then...
         if isempty(find(ismember(p.UsingDefaults,p.Parameters{i}),1))
-            
-            %get rows of table that equal desired values...
-            ind = getfield(sampleTable,p.Parameters{i}) == getfield(p.Results,p.Parameters{i});
+
+            %get rows of table whose value is in the requested set. ismember
+            %accepts either a scalar (equivalent to ==) or a vector/range
+            %(e.g. ImageNum = 620152:620159), so a set of data can be matched
+            ind = ismember(getfield(sampleTable,p.Parameters{i}), getfield(p.Results,p.Parameters{i}));
 
             %retain only the matching rows
             sampleTable = sampleTable(ind,:);
