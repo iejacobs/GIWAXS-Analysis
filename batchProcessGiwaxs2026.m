@@ -36,9 +36,9 @@ processPars.Colormap = @magma;
 processPars.IPCutQ = [0.1 0.12];
 
 %q range and size (pixels) for the reshaped diffraction images.
-processPars.ReshapeQr = [-0.8 3.2];
-processPars.ReshapeQz = [0 3.2];
-processPars.ReshapePoints = [900,900];
+processPars.ReshapeQr = [-0.5 3];
+processPars.ReshapeQz = [0 3];
+processPars.ReshapePoints = [1000,1000];
 
 %Figure output format: "png" (high resolution raster) or "pdf" (vector).
 processPars.PlotFormat = "png";

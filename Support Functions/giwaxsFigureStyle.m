@@ -8,20 +8,20 @@ function giwaxsFigureStyle(fig, varargin)
 %   edit here to restyle all GIWAXS plots at once.
 %
 %   GIWAXSFIGURESTYLE(FIG, Name, Value, ...) overrides individual settings:
-%     'FontSize'  (default 14)
+%     'FontSize'  (default 8)
 %     'FontName'  (default "Helvetica")
-%     'LineWidth' (default 1)      - axis (and colorbar) line width
-%     'DataLineWidth' (default 1.5)- width of plotted data lines (linecuts)
-%     'Size'      (default [12 10])- figure size in centimetres [width height]
+%     'LineWidth' (default 0.5)      - axis (and colorbar) line width
+%     'DataLineWidth' (default 0.5)- width of plotted data lines (linecuts)
+%     'Size'      (default [9 8])- figure size in centimetres [width height]
 %
 %   See also plotGiwaxsPattern, plotReshaped, plotLinecut.
 
 p = inputParser;
-addParameter(p,'FontSize',14,@(x)isnumeric(x)&&isscalar(x));
+addParameter(p,'FontSize',9,@(x)isnumeric(x)&&isscalar(x));
 addParameter(p,'FontName',"Helvetica",@(x)isstring(x)||ischar(x));
-addParameter(p,'LineWidth',1,@(x)isnumeric(x)&&isscalar(x));
-addParameter(p,'DataLineWidth',1.5,@(x)isnumeric(x)&&isscalar(x));
-addParameter(p,'Size',[12 10],@(x)isnumeric(x)&&numel(x)==2);
+addParameter(p,'LineWidth',0.5,@(x)isnumeric(x)&&isscalar(x));
+addParameter(p,'DataLineWidth',1,@(x)isnumeric(x)&&isscalar(x));
+addParameter(p,'Size',[9 8],@(x)isnumeric(x)&&numel(x)==2);
 parse(p,varargin{:});
 r = p.Results;
 
