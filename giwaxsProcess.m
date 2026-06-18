@@ -180,13 +180,13 @@ addParameter(p,'SaveData',defaultSave,validSave);
 %save the full processed gixsdata object (<name>_gixsguiData.mat). This file
 %is large (~80-90 MB/image: all q-maps + corrected data), so it is off by
 %default; the lightweight PNGs and linecut text/data are still written.
-defaultSaveProcessedData = false;
-addParameter(p,'SaveProcessedData',defaultSaveProcessedData,validSave);
+defaultSaveMatFile = false;
+addParameter(p,'SaveMatFile',defaultSaveMatFile,validSave);
 
 %save editable MATLAB figures (.fig). These are also large, so off by
 %default; the PNG (or PDF) images are still written.
-defaultSaveFig = false;
-addParameter(p,'SaveFig',defaultSaveFig,validSave);
+defaultSaveFigFile = false;
+addParameter(p,'SaveFigFile',defaultSaveFigFile,validSave);
 
 %color limits
 defaultCLim = [1 10000];
@@ -392,6 +392,91 @@ if ~isfolder(outputPath)
 end
 
 
+%%Geometry and colour-limit scaling%%
+%Resolve geometry (Beam0/SDD/energy) and scale the colour limits BEFORE the
+%image is loaded, so the GIXSGUI parameter file written below carries the
+%correct geometry. None of this depends on the image pixels - only on the
+%.dat metadata, the calibrations and the sample table - so it runs first.
+
+%resolve the metadata folder holding <imgNum>.dat (defaults to ImagePath)
+%and parse it once: both the geometry calibration and the colour-limit
+%scaling (beam transmission) are derived from this metadata.
+metaPath = opts.MetadataPath;
+if metaPath == ""
+    metaPath = opts.ImagePath;
+end
+datFile = fullfile(metaPath, num2str(imgNum) + ".dat");
+datParams = [];
+if isfile(datFile)
+    datParams = readDatParams(datFile);
+else
+    warning("giwaxsProcess:noDat", ...
+        "No metadata file ""%s"" for image %d.", datFile, imgNum);
+end
+
+%derive Beam0, SDD and beam energy from the .dat metadata + calibrations.
+%lowest automatic precedence: the sample table and Beam0/SDD arguments below
+%override these values. Warns and falls back if metadata/calibration missing.
+if opts.UseCalibration && ~isempty(datParams)
+    setGeometryFromCalibration(data, datParams, ...
+        opts.Beam0CalFile, opts.SDDCalFile);
+end
+
+%scale colour limits to the acquisition conditions using the beam
+%transmission from the .dat metadata ('transmission' field) and exposure
+%time (1 = no attenuation, exposure 1 s in the reference).
+if opts.ScaleToExposure && exist('exposureTime','var')
+    if ~isempty(datParams) && isfield(datParams,'transmission')
+        colorLimits = getCLims(colorLimits, datParams.transmission, ...
+            exposureTime, opts.PlotScale);
+    else
+        warning("giwaxsProcess:noTransmission", ...
+            "No 'transmission' field in metadata for image %d; " + ...
+            "colour limits not scaled.", imgNum);
+    end
+end
+
+%a Beam0 given in the sample table (column present and non-NaN) overrides
+%the calibration-derived value. Otherwise the value set above from the
+%metadata calibration is kept (setGeometryFromCalibration warns if that
+%could not be determined), so no warning is needed here.
+if ismember('Beam0', sampleTable.Properties.VariableNames)
+    beam0 = sampleTable.Beam0;
+    b0exists = ~isnan(beam0);
+    if numel(b0exists) >= 2 && b0exists(1) && b0exists(2)
+        data.Beam0 = beam0;
+        data.Specular = data.Beam0 - [0 1];
+    end
+end
+%update beam0 and specular if given in arguments. overwrites values given
+%in sampletable!
+if ~isempty(opts.Beam0)
+    data.Beam0 = opts.Beam0;
+    if ~isempty(opts.Specular)
+        data.Specular = opts.Specular;
+    else
+        data.Specular = data.Beam0 - [0 1];
+    end
+end
+
+%SDD given as argument overrides the calibration-derived value
+if ~isempty(opts.SDD)
+    data.SDD = opts.SDD;
+end
+
+%Write the GIXSGUI parameter file: a geometry-only template (no image data)
+%that can be loaded alongside the saved .tif for further post-processing.
+%_params.mat is reserved for parameter files only - when SaveMatFile
+%is true the full object (with the gap-filled image) is saved to
+%_gixsguiData.mat at the end instead, and no _params.mat is written.
+if opts.SaveData && ~opts.SaveMatFile
+    %copyhobj omits the (private) FigHandle, so no figure is serialized into
+    %the file (no "figure saved to MAT-file" warning to suppress).
+    params = copyhobj(data);
+    save(fullfile(outputPath,strcat(outputFilename,"_params.mat")),'params');
+end
+
+
 %%Find image file(s)%%
 %get list of tif files in ImagePath and find files matching imgnum
 filelist = dir(fullfile(opts.ImagePath,"*.tif"));
@@ -480,74 +565,8 @@ else
     data.ImFile = char(fullfile(opts.ImagePath,imgfile{1}));
 end
 
-
-%resolve the metadata folder holding <imgNum>.dat (defaults to ImagePath)
-%and parse it once: both the geometry calibration and the colour-limit
-%scaling (beam transmission) are derived from this metadata.
-metaPath = opts.MetadataPath;
-if metaPath == ""
-    metaPath = opts.ImagePath;
-end
-datFile = fullfile(metaPath, num2str(imgNum) + ".dat");
-datParams = [];
-if isfile(datFile)
-    datParams = readDatParams(datFile);
-else
-    warning("giwaxsProcess:noDat", ...
-        "No metadata file ""%s"" for image %d.", datFile, imgNum);
-end
-
-%derive Beam0, SDD and beam energy from the .dat metadata + calibrations.
-%lowest automatic precedence: the sample table and Beam0/SDD arguments below
-%override these values. Warns and falls back if metadata/calibration missing.
-if opts.UseCalibration && ~isempty(datParams)
-    setGeometryFromCalibration(data, datParams, ...
-        opts.Beam0CalFile, opts.SDDCalFile);
-end
-
-%scale colour limits to the acquisition conditions using the beam
-%transmission from the .dat metadata ('transmission' field) and exposure
-%time (1 = no attenuation, exposure 1 s in the reference).
-if opts.ScaleToExposure && exist('exposureTime','var')
-    if ~isempty(datParams) && isfield(datParams,'transmission')
-        colorLimits = getCLims(colorLimits, datParams.transmission, ...
-            exposureTime, opts.PlotScale);
-    else
-        warning("giwaxsProcess:noTransmission", ...
-            "No 'transmission' field in metadata for image %d; " + ...
-            "colour limits not scaled.", imgNum);
-    end
-end
-
-%a Beam0 given in the sample table (column present and non-NaN) overrides
-%the calibration-derived value. Otherwise the value set above from the
-%metadata calibration is kept (setGeometryFromCalibration warns if that
-%could not be determined), so no warning is needed here.
-if ismember('Beam0', sampleTable.Properties.VariableNames)
-    beam0 = sampleTable.Beam0;
-    b0exists = ~isnan(beam0);
-    if numel(b0exists) >= 2 && b0exists(1) && b0exists(2)
-        data.Beam0 = beam0;
-        data.Specular = data.Beam0 - [0 1];
-    end
-end
-%update beam0 and specular if given in arguments. overwrites values given
-%in sampletable!
-if ~isempty(opts.Beam0)
-    data.Beam0 = opts.Beam0;
-    if ~isempty(opts.Specular)
-        data.Specular = opts.Specular;
-    else
-        data.Specular = data.Beam0 - [0 1];
-    end
-end
-
-%SDD given as argument overrides the calibration-derived value
-if ~isempty(opts.SDD)
-    data.SDD = opts.SDD;
-end
-
-%update q maps if Beam0 or specular have changed
+%update q maps now that the image (and hence the detector dimensions) is
+%loaded; the geometry (Beam0/SDD/energy) was set above before the image.
 qmaps(data);
 
 
@@ -580,7 +599,7 @@ if opts.MakePlots
     if opts.SaveData
         figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern"));
         exportFigure(f,figFilename,opts.PlotFormat);
-        if opts.SaveFig
+        if opts.SaveFigFile
             savefig(f,strcat(figFilename,".fig"));
         end
     end
@@ -616,7 +635,7 @@ if opts.Reshape && ~plotDiffImages
         if opts.SaveData
             figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern_reshape"));
             exportFigure(f,figFilename,opts.PlotFormat);
-            if opts.SaveFig
+            if opts.SaveFigFile
                 savefig(f,strcat(figFilename,".fig"));
             end
         end
@@ -663,7 +682,7 @@ if opts.Interpolate
         if opts.SaveData
             figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern_interpolated"));
             exportFigure(f,figFilename,opts.PlotFormat);
-            if opts.SaveFig
+            if opts.SaveFigFile
                 savefig(f,strcat(figFilename,".fig"));
             end
         end
@@ -782,12 +801,14 @@ end
 end
 
 %% Save processed gixsgui file so we can reopen it later if needed
-if opts.SaveData && opts.SaveProcessedData
-    %the gixsdata object holds a graphics handle, which triggers a benign
-    %"figure saved to MAT-file" warning; suppress it just for this save
-    warnState = warning('off','MATLAB:Figure:FigureSavedToMATFile');
-    save(fullfile(outputPath,strcat(outputFilename,"_gixsguiData.mat")),'data')
-    warning(warnState);
+if opts.SaveData && opts.SaveMatFile
+    %copyhobj duplicates only the data/geometry/q-maps; it deliberately omits
+    %the (private) FigHandle, so the plotted figure is not serialized into the
+    %file - this keeps the file smaller (~8 MB) and avoids the "figure saved
+    %to MAT-file" warning. Saved under the variable name "data" via -struct so
+    %the object returned by this function is left untouched (figure intact).
+    toSave.data = copyhobj(data); % saved as variable 'data' below
+    save(fullfile(outputPath,strcat(outputFilename,"_gixsguiData.mat")),'-struct','toSave')
 end
 
 end

@@ -51,15 +51,17 @@ processPars.SaveData = true;
 processPars.GapFillMode = "average";
 
 %The large outputs are off by default to save disk space:
-%  SaveProcessedData - the full gixsdata object (~80-90 MB/image)
-%  SaveFig           - editable MATLAB .fig figures
-processPars.SaveProcessedData = false;
-processPars.SaveFig = false;
+%  SaveMatFile - the full gixsdata object (~80-90 MB/image, _gixsguiData.mat)
+%  SaveFigFile - editable MATLAB .fig figures
+%When SaveMatFile is false a small geometry-only GIXSGUI parameter file
+%(_params.mat) is written instead, to pair with the saved .tif.
+processPars.SaveMatFile = true;
+processPars.SaveFigFile = false;
 
 %Process the images across a parallel pool (parfor; needs the Parallel
 %Computing Toolbox). Worth it for large batches; for a few images the pool
 %startup outweighs the gain. Pool figures are not displayed.
-processPars.Parallel = true;
+processPars.Parallel = false;
 
 %NOTE: there are additional parameters you can specify if necessary, see
 %the giwaxsProcess function.
