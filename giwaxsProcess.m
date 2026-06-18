@@ -251,15 +251,9 @@ defaultPlotScale = "log";
 validPlotScale = @(x) strcmp(x,"linear") || strcmp(x,"log");
 addParameter(p,'PlotScale',defaultPlotScale,validPlotScale);
 
-%Plot Style Linecut
-defaultPlotStyleLinecut = "HalfCol";
-validPlotStyleLinecut = @(x) isstring(x);
-addParameter(p,'PlotStyleLinecut',defaultPlotStyleLinecut,validPlotStyleLinecut)
-
-%Plot Style GIWAXS
-defaultPlotStyleGIWAXS = "GIWAXS";
-validPlotStyleGIWAXS = @(x) isstring(x);
-addParameter(p,'PlotStyleGIWAXS',defaultPlotStyleGIWAXS,validPlotStyleGIWAXS)
+%Figure formatting is standardized by giwaxsFigureStyle (called by the plot
+%primitives plotGiwaxsPattern/plotReshaped/plotLinecut); edit that helper to
+%restyle all GIWAXS plots.
 
 
 if istable(sampleTableRowOrImgNum)
@@ -575,41 +569,19 @@ end
 
 %% Display the image with qz qy axis
 if opts.MakePlots
-
     if plotDiffImages
         data.PlotAxisLabel = 1; %linear scaling
-        figure
-        imagesc(data);
-        caxis(opts.DiffCLim)
-        colormap(feval(opts.DiffColormap,1000));
-        title('')
-        c = colorbar
-        c.Label.String = "Intensity change (%)";
-
-        if opts.SaveData
-            f = gcf;
-            figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern"));
-            exportFigure(f,figFilename,opts.PlotFormat);
-            if opts.SaveFig
-                savefig(f,strcat(figFilename,".fig"));
-            end
-        end
-
-
+        f = plotGiwaxsPattern(data, opts.DiffCLim, opts.DiffColormap, "Intensity change (%)");
     else
-        data.PlotAxisLabel = 2; 
-        figure
-        imagesc(data);
-        caxis(colorLimits);
-        colormap(feval(opts.Colormap,1000))
-        title('')
-        if opts.SaveData
-            f = gcf;
-            figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern"));
-            exportFigure(f,figFilename,opts.PlotFormat);
-            if opts.SaveFig
-                savefig(f,strcat(figFilename,".fig"));
-            end
+        data.PlotAxisLabel = 2;
+        f = plotGiwaxsPattern(data, colorLimits, opts.Colormap);
+    end
+
+    if opts.SaveData
+        figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern"));
+        exportFigure(f,figFilename,opts.PlotFormat);
+        if opts.SaveFig
+            savefig(f,strcat(figFilename,".fig"));
         end
     end
 end
@@ -638,24 +610,10 @@ if opts.Reshape && ~plotDiffImages
     
     % --- plot reshaped image
     if opts.MakePlots
-        figure
-        if data.PlotScale == 1
-            imagesc(processedImage.reshape.X,processedImage.reshape.Y,processedImage.reshape.Image,[1,4]);
-        else
-            imagesc(processedImage.reshape.X,processedImage.reshape.Y,log10(processedImage.reshape.Image),[1,4]);
-        end
-        axis equal
-        axis tight
-        set(gca,'ydir','norm');
-        xlabel('q_r (A^{-1})');
-        ylabel('q_z (A^{-1})');
-        %title('Reshaped image (log scale)');
-        caxis(colorLimits);
-        colormap(feval(opts.Colormap,1000))
-        
-        
+        f = plotReshaped(processedImage.reshape.X, processedImage.reshape.Y, ...
+            processedImage.reshape.Image, data.PlotScale, colorLimits, opts.Colormap, ...
+            "q_r (A^{-1})", "q_z (A^{-1})");
         if opts.SaveData
-            f = gcf;
             figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern_reshape"));
             exportFigure(f,figFilename,opts.PlotFormat);
             if opts.SaveFig
@@ -697,26 +655,12 @@ if opts.Interpolate
     dataflag = 2;       % 2 for corrected data; 1 for masked rawdata
     [processedImage.interp.X,processedImage.interp.Y,processedImage.interp.Image,countdata] = reshape_image(data,param_reshape,dataflag);
     
-    % --- plot reshaped image
+    % --- plot interpolated image
     if opts.MakePlots
-        figure
-        if data.PlotScale == 1
-            imagesc(processedImage.interp.X,processedImage.interp.Y,processedImage.interp.Image,[1,4]);
-        else
-            imagesc(processedImage.interp.X,processedImage.interp.Y,log10(processedImage.interp.Image),[1,4]);
-        end
-        axis equal
-        axis tight
-        set(gca,'ydir','norm');
-        xlabel('q_y (A^{-1})');
-        ylabel('q_z (A^{-1})');
-        %title('Reshaped image (log scale)');
-        caxis(colorLimits);
-        colormap(feval(opts.Colormap,1000))
-        
-        
+        f = plotReshaped(processedImage.interp.X, processedImage.interp.Y, ...
+            processedImage.interp.Image, data.PlotScale, colorLimits, opts.Colormap, ...
+            "q_y (A^{-1})", "q_z (A^{-1})");
         if opts.SaveData
-            f = gcf;
             figFilename = fullfile(outputPath,strcat(outputFilename,"_GIWAXSpattern_interpolated"));
             exportFigure(f,figFilename,opts.PlotFormat);
             if opts.SaveFig
@@ -750,11 +694,7 @@ IPlinecut.y = y;
 
 %% plot linecut
 if opts.MakePlots
-    figure
-    plot(x,y)
-    xlabel('q_y (A^{-1})');
-    ylabel('Intensity (a.u.)');
-    axis tight
+    ipLinecutFig = plotLinecut(x, y, "q_y (A^{-1})", "linear");
 end
 
 %% Inplane linecut fitting
@@ -787,10 +727,9 @@ if opts.SaveData
         'IPlinecut');
     
     if opts.MakePlots
-        %save fit plot to file
-        f = gcf;
+        %save linecut plot to file
         figFilename = fullfile(outputPath,strcat(outputFilename,"_Linecut_InPlane_plot"));
-        exportFigure(f,figFilename,opts.PlotFormat);
+        exportFigure(ipLinecutFig,figFilename,opts.PlotFormat);
     end
 end
 
@@ -808,11 +747,7 @@ OOPlinecut.y = y;
 
 %% Plot linecut
 if opts.MakePlots
-    figure
-    semilogy(x,y)
-    xlabel('q_z (A^{-1})');
-    ylabel('Intensity (a.u.)');
-    axis tight
+    oopLinecutFig = plotLinecut(x, y, "q_z (A^{-1})", "log");
 end
 
 %% OOP linecut fitting
@@ -839,10 +774,9 @@ if opts.SaveData
         'OOPlinecut');
     
     if opts.MakePlots
-        %save fit plot to file
-        f = gcf;
+        %save linecut plot to file
         figFilename = fullfile(outputPath,strcat(outputFilename,"_Linecut_OutOfPlane_plot"));
-        exportFigure(f,figFilename,opts.PlotFormat);
+        exportFigure(oopLinecutFig,figFilename,opts.PlotFormat);
     end
 end
 end
@@ -856,18 +790,5 @@ if opts.SaveData && opts.SaveProcessedData
     warning(warnState);
 end
 
-end
-
-
-function exportFigure(f, figFilename, plotFormat)
-%EXPORTFIGURE Export figure f to figFilename using the requested format.
-%   Replaces the removed hgexport: PDFs are written as vector graphics, PNGs
-%   at high resolution. The extension is appended from plotFormat ("png" or
-%   "pdf").
-if strcmp(plotFormat,"pdf")
-    exportgraphics(f, strcat(figFilename,".pdf"), 'ContentType','vector');
-else
-    exportgraphics(f, strcat(figFilename,".png"), 'Resolution', 300);
-end
 end
 
