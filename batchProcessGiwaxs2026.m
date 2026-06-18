@@ -56,6 +56,11 @@ processPars.GapFillMode = "average";
 processPars.SaveProcessedData = false;
 processPars.SaveFig = false;
 
+%Process the images across a parallel pool (parfor; needs the Parallel
+%Computing Toolbox). Worth it for large batches; for a few images the pool
+%startup outweighs the gain. Pool figures are not displayed.
+processPars.Parallel = true;
+
 %NOTE: there are additional parameters you can specify if necessary, see
 %the giwaxsProcess function.
 

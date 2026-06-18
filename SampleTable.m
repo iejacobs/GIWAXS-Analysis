@@ -111,39 +111,70 @@ classdef SampleTable
             %   automatically, so giwaxsProcess resolves the data/calibration/
             %   correction paths from beamtimeConfig. Gap-fill partners are
             %   combined into a single output, so each pair is processed once.
-            %   If an output is requested, returns a cell of the processed
-            %   gixsdata objects.
-            opts = SampleTable.optionsToNameValue(varargin);
+            %
+            %   Set 'Parallel', true to run the images across a parallel pool
+            %   (parfor, requires Parallel Computing Toolbox) - useful for large
+            %   batches. The 'Parallel' option is consumed here and not passed to
+            %   giwaxsProcess.
+            %
+            %   If an output is requested (serial mode only), returns a cell of
+            %   the processed gixsdata objects.
+            nv = SampleTable.optionsToNameValue(varargin);
+            [useParallel, opts] = SampleTable.peelOption(nv, 'Parallel', false);
 
-            hasGapFill = ismember('GapFillPartner', obj.Data.Properties.VariableNames);
-            alreadyProcessed = false(height(obj.Data), 1);
-            results = {};
+            % One representative row per gap-fill pair (and every single),
+            % computed up front so the loop has no cross-iteration dependency.
+            rows = obj.processRows();
+            tbl  = obj.Data;
+            bt   = obj.Beamtime;
+            n    = numel(rows);
+            results = cell(1, n);
 
-            for i = 1:height(obj.Data)
-                if alreadyProcessed(i)
-                    continue
+            if useParallel
+                parfor k = 1:n
+                    giwaxsProcess(tbl(rows(k),:), 'Beamtime', bt, opts{:});
+                    close all force   % free the worker's figures each iteration
                 end
-                close all
-                d = giwaxsProcess(obj.Data(i,:), 'Beamtime', obj.Beamtime, opts{:});
-                alreadyProcessed(i) = true;
-                if nargout > 0
-                    results{end+1} = d; %#ok<AGROW>
-                end
-
-                % a gap-fill partner is combined into the same output; if that
-                % partner is also in this selection, skip it (avoid duplicates)
-                if hasGapFill && ~isnan(obj.Data.GapFillPartner(i))
-                    alreadyProcessed(obj.Data.ImageNum == obj.Data.GapFillPartner(i)) = true;
+            else
+                for k = 1:n
+                    close all
+                    results{k} = giwaxsProcess(tbl(rows(k),:), 'Beamtime', bt, opts{:});
                 end
             end
 
             if nargout > 0
-                varargout{1} = results;
+                if useParallel
+                    warning('SampleTable:parallelNoResults', ...
+                        ['Processed data are not returned in Parallel mode; ' ...
+                         'outputs were written to disk.']);
+                    varargout{1} = {};
+                else
+                    varargout{1} = results;
+                end
             end
         end
     end
 
     methods (Access = private)
+        function rows = processRows(obj)
+            % Row indices to process: every row, minus the second member of
+            % each gap-fill pair that is present in this selection (its lower-
+            % numbered partner is the representative and combines both images).
+            n = height(obj.Data);
+            keep = true(n, 1);
+            if ismember('GapFillPartner', obj.Data.Properties.VariableNames)
+                img     = double(obj.Data.ImageNum);
+                partner = obj.Data.GapFillPartner;
+                for i = 1:n
+                    p = partner(i);
+                    if ~isnan(p) && ismember(p, img) && p < img(i)
+                        keep(i) = false;
+                    end
+                end
+            end
+            rows = find(keep);
+        end
+
         function n = nGapFillPairs(obj)
             if ismember('GapFillPartner', obj.Data.Properties.VariableNames)
                 n = nnz(~isnan(obj.Data.GapFillPartner)) / 2;
@@ -170,6 +201,19 @@ classdef SampleTable
                 nv(2:2:end) = vals;
             else
                 nv = args;
+            end
+        end
+        function [val, rest] = peelOption(nv, name, default)
+            % Remove a name-value option (consumed by process, not forwarded to
+            % giwaxsProcess); return its value (or DEFAULT) and the remainder.
+            val  = default;
+            rest = nv;
+            names = nv(1:2:end);
+            hit = find(strcmpi(names, name), 1, 'last');
+            if ~isempty(hit)
+                namePos = 2*hit - 1;
+                val = nv{namePos + 1};
+                rest([namePos, namePos+1]) = [];
             end
         end
     end
