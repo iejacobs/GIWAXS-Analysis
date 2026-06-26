@@ -2,97 +2,72 @@ clear all
 clc
 close all
 
-%Specify raw data and processed and data paths. Data will be saved in a
-%subfolder for each user in the processed data folder.
-processPars.ImagePath = "/Users/ianjacobs/Dropbox (Cambridge University)/Research/GIWAXS/January 2024 Beamtime/Raw Data/si35227-1/pilatus2"
-processPars.OutputPath = "/Users/ianjacobs/Dropbox (Cambridge University)/Research/GIWAXS/January 2024 Beamtime/Reprocessed Data New FF"
+%% Paths
+%Make sure the analysis code (and its Support Functions / Calibration
+%Scripts) is on the MATLAB path. This script lives in the GIWAXS-Analysis
+%folder, so derive the location from itself.
+analysisDir = fileparts(mfilename('fullpath'));
+addpath(genpath(analysisDir));
 
-%Specify sample table to use; for previous year's data this will change.
-sampleTableFile = "sampleTable2024.mat"
+%% Beamtime
+%Root of the beamtime data. This is the only path to set; every other path
+%(raw data, output, sample table, calibrations, corrections) is derived from
+%it by beamtimeConfig. SampleTable loads this beamtime's sample log.
+beamtimeDir = "/Users/ianjacobs/Physics_Cambridge Dropbox/Dr I.E. Jacobs/Research/GIWAXS/February 2026 Beamtime";
+data = SampleTable(beamtimeDir);
 
-%Specify data to process. Selects only data matching ALL conditions.
-%Comment out any parameters which you don't which to use
+%% Data selection
+%Pick the subset of measurements to process. Selection methods chain, e.g.:
+%   subset = data.bySampleSet("Ian").bySample("1 PBTTT Undoped");
+%   subset = data.byAttenuation(0);
+%   subset = data.select('SampleSet',"Ian", 'IncidenceAngle',0.15);
+%Use data.users() and data.samples() to see what is available.
+subset = data.bySampleSet("Yingqiao");   %test set: Ian "1 PBTTT Undoped" mirror-8
 
-ImageNum = 501555;
-SampleSet = "Hio-Ieng";
-%SampleName = ""
-%Attenuation = 0
-%ExposureTime = 1
-%IncidenceAngle = 0.2
-%Temperature = 290
-%BeamEnergy = 12.5
-%Vg = 0
-%Vd = 0
-%ElectricalData = ""
-%Notes = ""
-
-%% Additional processing parameters
-
-%Specify color limits for diffraction images. If current image is too dark,
-%reduce these values; if too light, increase them. Note, these values are
-%automatically scaled for attenuation and exposure time. To turn off
-%automatic scaling set scaleToExposure to false
-processPars.CLim = [1 10000];
+%% Processing parameters
+%Color limits for diffraction images; automatically scaled for attenuation
+%and exposure time (set ScaleToExposure false to turn that off).
+processPars.CLim = [1 1000];
 processPars.ScaleToExposure = true;
 
-%Specify colormap to use in diffraction images. Third party color maps are
-%supported, just give the name of the generating function.
-processPars.Colormap = "magma"
+%Colormap (function handle to the generating function).
+processPars.Colormap = @magma;
 
 processPars.IPCutQ = [0.1 0.12];
+processPars.OOPCutQ = [0.01 0.02];
 
-%Specify q range for reshaped diffraction images. 
-processPars.ReshapeQr = [-0.8 3.2];
-processPars.ReshapeQz = [0 3.2];
+%q range and size (pixels) for the reshaped diffraction images.
+processPars.ReshapeQr = [-0.5 3];
+processPars.ReshapeQz = [0 3];
+processPars.ReshapePoints = [1000,1000];
 
-%Specify reshaped image size (in pixels). Too high can lead to artifacts in
-%reshaped images.
-processPars.ReshapePoints = [900,900];
+%Figure output format: "png" (high resolution raster) or "pdf" (vector).
+processPars.PlotFormat = "png";
 
-%If you don't want to save the data, set this to false
+%Master save switch; set false to process without writing anything.
 processPars.SaveData = true;
 
+%When gap-filling, "average" both images where they overlap, or keep the
+%"base" image and use the partner only to fill its gaps.
+processPars.GapFillMode = "average";
+
+%The large outputs are off by default to save disk space:
+%  SaveMatFile - the full gixsdata object (~80-90 MB/image, _gixsguiData.mat)
+%  SaveFigFile - editable MATLAB .fig figures
+%When SaveMatFile is false a small geometry-only GIXSGUI parameter file
+%(_params.mat) is written instead, to pair with the saved .tif.
+processPars.SaveMatFile = true;
+processPars.SaveFigFile = false;
+
+%Process the images across a parallel pool (parfor; needs the Parallel
+%Computing Toolbox). Worth it for large batches; for a few images the pool
+%startup outweighs the gain. Pool figures are not displayed.
+processPars.Parallel = true;
+
 %NOTE: there are additional parameters you can specify if necessary, see
-%giwaxsProcess function.
+%the giwaxsProcess function.
 
-
-%% Process GIWAXS data
-
-%load sample table
-load(sampleTableFile)
-
-%get sample table matching values set above
-varnames = sampleTable.Properties.VariableNames;
-for i = 1:length(varnames)
-    if exist(varnames{i})'
-        if exist("pars")
-            pars = {pars{:},varnames{i},eval(varnames{i})};
-        else
-             pars = {varnames{i},eval(varnames{i})};
-        end
-    end
-end
-
-%get matching subtable and display in console
-sampleTable = getSubSampleTable(sampleTable,pars{:})
-
-%get processing parameter list
-if exist("processPars")
-    processParsNames = fieldnames(processPars);
-    for i = 1:length(fieldnames(processPars))
-        if exist("processParsList")
-            processParsList = {processParsList{:},processParsNames{i},getfield(processPars,processParsNames{i})};
-        else
-            processParsList = {processParsNames{i},getfield(processPars,processParsNames{i})};
-        end
-    end
-else
-    processParsList = {};
-end
-
-%process giwaxs data
-for i = 1:height(sampleTable)
-    close all
-
-    [data,ipcut,oopcut] = giwaxsProcess(sampleTable(i,:),processParsList{:});
-end
+%% Process
+%Runs giwaxsProcess over the selection; gap-fill pairs are combined into a
+%single output, so each pair is processed once.
+subset.process(processPars);
