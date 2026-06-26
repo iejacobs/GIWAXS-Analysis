@@ -238,7 +238,7 @@ if exist('sampleTable')
                 datParams = readDatParams(datFile);
             end
             if ~isempty(datParams) && isfield(datParams,'transmission')
-                colorLimits = getCLims(colorLimits,datParams.transmission,exposureTime,p.Results.PlotScale);
+                colorLimits = scaleClimsToExposure(colorLimits,datParams.transmission,exposureTime,p.Results.PlotScale);
             else
                 warning("giwaxsProcessImgNum:noTransmission", ...
                     "No 'transmission' metadata for image %d; colour limits not scaled.", imgNum);
